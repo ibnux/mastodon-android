@@ -36,6 +36,7 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
+import okhttp3.logging.HttpLoggingInterceptor;
 
 public class MastodonAPIController {
     private static final String TAG = "MastodonAPIController";
@@ -203,8 +204,12 @@ public class MastodonAPIController {
 
     public static OkHttpClient getHttpClient() {
         if (httpClient == null) {
+            HttpLoggingInterceptor log = new HttpLoggingInterceptor();
+            log.setLevel(HttpLoggingInterceptor.Level.BODY);
             httpClient = new OkHttpClient.Builder()
-                    .connectTimeout(1, TimeUnit.MINUTES)
+                    .addInterceptor(log)
+                    .retryOnConnectionFailure(true)
+                    .connectTimeout(5, TimeUnit.SECONDS)
                     .callTimeout(1, TimeUnit.MINUTES)
                     .readTimeout(1, TimeUnit.MINUTES)
                     .writeTimeout(1, TimeUnit.MINUTES)

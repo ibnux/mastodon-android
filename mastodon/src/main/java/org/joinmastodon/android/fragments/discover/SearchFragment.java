@@ -176,7 +176,7 @@ public class SearchFragment extends BaseStatusListFragment<SearchResult>{
 		boolean recent=isInRecentMode();
 		if(recent!=headerAdapter.isVisible())
 			headerAdapter.setVisible(recent);
-		imgLoader.forceUpdateImages();
+		imgLoader.updateImages();
 		prevDisplayItems=null;
 	}
 
