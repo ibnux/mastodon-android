@@ -1,14 +1,18 @@
 package org.joinmastodon.android.fragments.onboarding;
 
-import android.app.Activity;
 import android.app.ProgressDialog;
-import android.content.Intent;
-import android.net.Uri;
+import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.Html;
+import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.TextUtils;
 import android.text.TextWatcher;
-import android.util.Log;
+import android.text.style.TypefaceSpan;
+import android.text.style.URLSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -16,32 +20,35 @@ import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.TextView;
 
 import org.joinmastodon.android.R;
-import org.joinmastodon.android.api.MastodonAPIController;
 import org.joinmastodon.android.api.MastodonDetailedErrorResponse;
 import org.joinmastodon.android.api.requests.accounts.RegisterAccount;
 import org.joinmastodon.android.api.requests.oauth.CreateOAuthApp;
 import org.joinmastodon.android.api.requests.oauth.GetOauthToken;
+import org.joinmastodon.android.api.session.AccountActivationInfo;
 import org.joinmastodon.android.api.session.AccountSessionManager;
 import org.joinmastodon.android.model.Account;
 import org.joinmastodon.android.model.Application;
 import org.joinmastodon.android.model.Instance;
 import org.joinmastodon.android.model.Token;
-import org.joinmastodon.android.ui.OutlineProviders;
+import org.joinmastodon.android.ui.text.LinkSpan;
 import org.joinmastodon.android.ui.utils.SimpleTextWatcher;
 import org.joinmastodon.android.ui.utils.UiUtils;
+import org.joinmastodon.android.ui.views.FloatingHintEditTextLayout;
+import org.joinmastodon.android.utils.ElevationOnScrollListener;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
+import org.jsoup.nodes.Node;
+import org.jsoup.nodes.TextNode;
+import org.jsoup.select.NodeVisitor;
 import org.parceler.Parcels;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import androidx.annotation.Nullable;
@@ -49,31 +56,28 @@ import me.grishka.appkit.Nav;
 import me.grishka.appkit.api.APIRequest;
 import me.grishka.appkit.api.Callback;
 import me.grishka.appkit.api.ErrorResponse;
-import me.grishka.appkit.fragments.AppKitFragment;
-import me.grishka.appkit.imageloader.ViewImageLoader;
-import me.grishka.appkit.imageloader.requests.UrlImageLoaderRequest;
+import me.grishka.appkit.fragments.ToolbarFragment;
 import me.grishka.appkit.utils.V;
+import me.grishka.appkit.views.FragmentRootLinearLayout;
 
-public class SignupFragment extends AppKitFragment{
-	private static final int AVATAR_RESULT=198;
+public class SignupFragment extends ToolbarFragment{
 	private static final String TAG="SignupFragment";
 
 	private Instance instance;
 
-	private EditText displayName, username, email, password, reason;
+	private EditText displayName, username, email, password, passwordConfirm, reason;
+	private FloatingHintEditTextLayout displayNameWrap, usernameWrap, emailWrap, passwordWrap, passwordConfirmWrap, reasonWrap;
 	private TextView reasonExplain;
 	private Button btn;
 	private View buttonBar;
 	private TextWatcher buttonStateUpdater=new SimpleTextWatcher(e->updateButtonState());
-	private ImageView avatar;
 	private APIRequest currentBackgroundRequest;
 	private Application apiApplication;
 	private Token apiToken;
 	private boolean submitAfterGettingToken;
 	private ProgressDialog progressDialog;
-	private Uri avatarUri;
-	private File avatarFile;
 	private HashSet<EditText> errorFields=new HashSet<>();
+	private ElevationOnScrollListener onScrollListener;
 
 	@Override
 	public void onCreate(Bundle savedInstanceState){
@@ -81,25 +85,30 @@ public class SignupFragment extends AppKitFragment{
 		setRetainInstance(true);
 		instance=Parcels.unwrap(getArguments().getParcelable("instance"));
 		createAppAndGetToken();
+		setTitle(R.string.signup_title);
 	}
 
 	@Nullable
 	@Override
-	public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container, Bundle savedInstanceState){
+	public View onCreateContentView(LayoutInflater inflater, @Nullable ViewGroup container, Bundle savedInstanceState){
 		View view=inflater.inflate(R.layout.fragment_onboarding_signup, container, false);
 
-		TextView title=view.findViewById(R.id.title);
 		TextView domain=view.findViewById(R.id.domain);
 		displayName=view.findViewById(R.id.display_name);
 		username=view.findViewById(R.id.username);
 		email=view.findViewById(R.id.email);
 		password=view.findViewById(R.id.password);
-		avatar=view.findViewById(R.id.avatar);
+		passwordConfirm=view.findViewById(R.id.password_confirm);
 		reason=view.findViewById(R.id.reason);
 		reasonExplain=view.findViewById(R.id.reason_explain);
-		View avaWrap=view.findViewById(R.id.ava_wrap);
 
-		title.setText(getString(R.string.signup_title, instance.uri));
+		displayNameWrap=view.findViewById(R.id.display_name_wrap);
+		usernameWrap=view.findViewById(R.id.username_wrap);
+		emailWrap=view.findViewById(R.id.email_wrap);
+		passwordWrap=view.findViewById(R.id.password_wrap);
+		passwordConfirmWrap=view.findViewById(R.id.password_confirm_wrap);
+		reasonWrap=view.findViewById(R.id.reason_wrap);
+
 		domain.setText('@'+instance.uri);
 
 		username.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener(){
@@ -114,22 +123,19 @@ public class SignupFragment extends AppKitFragment{
 		btn=view.findViewById(R.id.btn_next);
 		btn.setOnClickListener(v->onButtonClick());
 		buttonBar=view.findViewById(R.id.button_bar);
-		view.findViewById(R.id.btn_back).setOnClickListener(v->Nav.finish(this));
 		updateButtonState();
 
 		username.addTextChangedListener(buttonStateUpdater);
 		email.addTextChangedListener(buttonStateUpdater);
 		password.addTextChangedListener(buttonStateUpdater);
+		passwordConfirm.addTextChangedListener(buttonStateUpdater);
 		reason.addTextChangedListener(buttonStateUpdater);
 
 		username.addTextChangedListener(new ErrorClearingListener(username));
 		email.addTextChangedListener(new ErrorClearingListener(email));
 		password.addTextChangedListener(new ErrorClearingListener(password));
+		passwordConfirm.addTextChangedListener(new ErrorClearingListener(passwordConfirm));
 		reason.addTextChangedListener(new ErrorClearingListener(reason));
-
-		avaWrap.setOutlineProvider(OutlineProviders.roundedRect(22));
-		avaWrap.setClipToOutline(true);
-		avaWrap.setOnClickListener(v->onAvatarClick());
 
 		if(!instance.approvalRequired){
 			reason.setVisibility(View.GONE);
@@ -142,10 +148,26 @@ public class SignupFragment extends AppKitFragment{
 	@Override
 	public void onViewCreated(View view, Bundle savedInstanceState){
 		super.onViewCreated(view, savedInstanceState);
-		setStatusBarColor(UiUtils.getThemeColor(getActivity(), R.attr.colorBackgroundLight));
+		setStatusBarColor(UiUtils.getThemeColor(getActivity(), R.attr.colorM3Background));
+		view.setBackgroundColor(UiUtils.getThemeColor(getActivity(), R.attr.colorM3Background));
+		view.findViewById(R.id.scroller).setOnScrollChangeListener(onScrollListener=new ElevationOnScrollListener((FragmentRootLinearLayout) view, buttonBar, getToolbar()));
+	}
+
+	@Override
+	protected void onUpdateToolbar(){
+		super.onUpdateToolbar();
+		getToolbar().setBackgroundResource(R.drawable.bg_onboarding_panel);
+		getToolbar().setElevation(0);
+		if(onScrollListener!=null){
+			onScrollListener.setViews(buttonBar, getToolbar());
+		}
 	}
 
 	private void onButtonClick(){
+		if(!password.getText().toString().equals(passwordConfirm.getText().toString())){
+			passwordConfirmWrap.setErrorState(getString(R.string.signup_passwords_dont_match));
+			return;
+		}
 		showProgressDialog();
 		if(currentBackgroundRequest!=null){
 			submitAfterGettingToken=true;
@@ -160,32 +182,8 @@ public class SignupFragment extends AppKitFragment{
 		}
 	}
 
-	private void copyAvatar(Runnable onDone){
-		// Need to copy the avatar from the content provider to somewhere accessible in case the app gets killed between signup and account activation
-		Activity activity=getActivity();
-		MastodonAPIController.runInBackground(()->{
-			String origName=UiUtils.getFileName(avatarUri);
-			avatarFile=new File(activity.getCacheDir(), System.currentTimeMillis()+origName.substring(origName.lastIndexOf('.')));
-			try(InputStream in=activity.getContentResolver().openInputStream(avatarUri);
-				FileOutputStream out=new FileOutputStream(avatarFile)){
-				byte[] buf=new byte[10240];
-				int read;
-				while((read=in.read(buf))>0){
-					out.write(buf, 0, read);
-				}
-			}catch(IOException x){
-				Log.w(TAG, "copyAvatar: error copying", x);
-			}
-			activity.runOnUiThread(onDone);
-		});
-	}
-
 	private void submit(){
-		if(avatarUri!=null && (avatarFile==null || !avatarFile.exists())){
-			copyAvatar(this::actuallySubmit);
-		}else{
-			actuallySubmit();
-		}
+		actuallySubmit();
 	}
 
 	private void actuallySubmit(){
@@ -204,9 +202,7 @@ public class SignupFragment extends AppKitFragment{
 						fakeAccount.acct=fakeAccount.username=username;
 						fakeAccount.id="tmp"+System.currentTimeMillis();
 						fakeAccount.displayName=displayName.getText().toString();
-						if(avatarFile!=null)
-							fakeAccount.avatar=avatarFile.getAbsolutePath();
-						AccountSessionManager.getInstance().addAccount(instance, result, fakeAccount, apiApplication, false);
+						AccountSessionManager.getInstance().addAccount(instance, result, fakeAccount, apiApplication, new AccountActivationInfo(email, System.currentTimeMillis()));
 						Bundle args=new Bundle();
 						args.putString("account", AccountSessionManager.getInstance().getLastActiveAccountID());
 						Nav.goClearingStack(getActivity(), AccountActivationFragment.class, args);
@@ -224,7 +220,22 @@ public class SignupFragment extends AppKitFragment{
 									anyFieldsSkipped=true;
 									continue;
 								}
-								field.setError(fieldErrors.get(fieldName).stream().map(err->err.description).collect(Collectors.joining("\n")));
+								List<MastodonDetailedErrorResponse.FieldError> errors=Objects.requireNonNull(fieldErrors.get(fieldName));
+								if(errors.size()==1){
+									getFieldWrapByName(fieldName).setErrorState(getErrorDescription(errors.get(0), fieldName));
+								}else{
+									SpannableStringBuilder ssb=new SpannableStringBuilder();
+									boolean firstErr=true;
+									for(MastodonDetailedErrorResponse.FieldError err:errors){
+										if(firstErr){
+											firstErr=false;
+										}else{
+											ssb.append('\n');
+										}
+										ssb.append(getErrorDescription(err, fieldName));
+									}
+									getFieldWrapByName(fieldName).setErrorState(getErrorDescription(errors.get(0), fieldName));
+								}
 								errorFields.add(field);
 								if(first){
 									first=false;
@@ -242,12 +253,56 @@ public class SignupFragment extends AppKitFragment{
 				.exec(instance.uri, apiToken);
 	}
 
+	private CharSequence getErrorDescription(MastodonDetailedErrorResponse.FieldError error, String fieldName){
+		return switch(fieldName){
+			case "email" -> switch(error.error){
+				case "ERR_BLOCKED" -> {
+					String emailAddr=email.getText().toString();
+					String s=getResources().getString(R.string.signup_email_domain_blocked, TextUtils.htmlEncode(instance.uri), TextUtils.htmlEncode(emailAddr.substring(emailAddr.lastIndexOf('@')+1)));
+					SpannableStringBuilder ssb=new SpannableStringBuilder();
+					Jsoup.parseBodyFragment(s).body().traverse(new NodeVisitor(){
+						private int spanStart;
+						@Override
+						public void head(Node node, int depth){
+							if(node instanceof TextNode tn){
+								ssb.append(tn.text());
+							}else if(node instanceof Element){
+								spanStart=ssb.length();
+							}
+						}
+
+						@Override
+						public void tail(Node node, int depth){
+							if(node instanceof Element){
+								ssb.setSpan(new LinkSpan("", SignupFragment.this::onGoBackLinkClick, LinkSpan.Type.CUSTOM, null), spanStart, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+								ssb.setSpan(new TypefaceSpan("sans-serif-medium"), spanStart, ssb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+							}
+						}
+					});
+					yield ssb;
+				}
+				default -> error.description;
+			};
+			default -> error.description;
+		};
+	}
+
 	private EditText getFieldByName(String name){
 		return switch(name){
 			case "email" -> email;
 			case "username" -> username;
 			case "password" -> password;
 			case "reason" -> reason;
+			default -> null;
+		};
+	}
+
+	private FloatingHintEditTextLayout getFieldWrapByName(String name){
+		return switch(name){
+			case "email" -> emailWrap;
+			case "username" -> usernameWrap;
+			case "password" -> passwordWrap;
+			case "reason" -> reasonWrap;
 			default -> null;
 		};
 	}
@@ -262,7 +317,7 @@ public class SignupFragment extends AppKitFragment{
 	}
 
 	private void updateButtonState(){
-		btn.setEnabled(username.length()>0 && email.length()>0 && email.getText().toString().contains("@") && password.length()>=8 && (!instance.approvalRequired || reason.length()>0));
+		btn.setEnabled(username.length()>0 && email.length()>0 && email.getText().toString().contains("@") && password.length()>=8 && passwordConfirm.length()>=8 && (!instance.approvalRequired || reason.length()>0));
 	}
 
 	private void createAppAndGetToken(){
@@ -324,18 +379,9 @@ public class SignupFragment extends AppKitFragment{
 		}
 	}
 
-	@Override
-	public void onActivityResult(int requestCode, int resultCode, Intent data){
-		if(requestCode==AVATAR_RESULT && resultCode==Activity.RESULT_OK){
-			avatarUri=data.getData();
-			if(avatarFile!=null && avatarFile.exists())
-				avatarFile.delete();
-			ViewImageLoader.load(avatar, getResources().getDrawable(R.drawable.default_avatar), new UrlImageLoaderRequest(avatarUri, V.dp(100), V.dp(100)));
-		}
-	}
-
-	private void onAvatarClick(){
-		startActivityForResult(new Intent(Intent.ACTION_GET_CONTENT).setType("image/*").addCategory(Intent.CATEGORY_OPENABLE), AVATAR_RESULT);
+	private void onGoBackLinkClick(LinkSpan span){
+		setResult(false, null);
+		Nav.finish(this);
 	}
 
 	private class ErrorClearingListener implements TextWatcher{

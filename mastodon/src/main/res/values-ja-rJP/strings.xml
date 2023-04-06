@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-	<string name="get_started">はじめよう</string>
 	<string name="log_in">ログイン</string>
 	<string name="next">次へ</string>
-	<string name="loading_instance">インスタンスを取得しています…</string>
 	<string name="error">エラー</string>
-	<string name="not_a_mastodon_instance">%sはMastodonインスタンスではありません。</string>
 	<string name="ok">OK</string>
 	<string name="preparing_auth">認証を開始中…</string>
 	<string name="finishing_auth">認証を完了中…</string>
@@ -61,7 +58,7 @@
 	<string name="field_label">ラベル</string>
 	<string name="field_content">コンテンツ</string>
 	<string name="saving">保存中…</string>
-	<string name="post_from_user">%s さんの投稿</string>
+	<string name="post_from_user">%sさんの投稿</string>
 	<string name="poll_option_hint">オプション %d</string>
 	<plurals name="x_minutes">
 		<item quantity="other">%d分</item>
@@ -90,10 +87,10 @@
 	</plurals>
 	<string name="poll_closed">閉じる</string>
 	<string name="confirm_mute_title">アカウントをミュート</string>
-	<string name="confirm_mute">本当に %s さんをミュートしますか？</string>
+	<string name="confirm_mute">本当に%sさんをミュートしますか？</string>
 	<string name="do_mute">ミュート</string>
 	<string name="confirm_unmute_title">アカウントのミュートを解除</string>
-	<string name="confirm_unmute">本当に %s さんをミュート解除しますか？</string>
+	<string name="confirm_unmute">本当に%sさんをミュート解除しますか？</string>
 	<string name="do_unmute">ミュート解除</string>
 	<string name="confirm_block_title">アカウントをブロックする</string>
 	<string name="confirm_block_domain_title">このドメインをブロックする</string>
@@ -128,9 +125,9 @@
 	<plurals name="discussed_x_times">
 		<item quantity="other">%d 回ディスカッションしました</item>
 	</plurals>
-	<string name="report_title">%s さんを報告する</string>
+	<string name="report_title">%sさんを報告する</string>
 	<string name="report_choose_reason">この投稿のどこが問題ですか？</string>
-	<string name="report_choose_reason_account">%s さんのどこが問題ですか？</string>
+	<string name="report_choose_reason_account">%sさんのどこが問題ですか？</string>
 	<string name="report_choose_reason_subtitle">最も近いものを選んでください</string>
 	<string name="report_reason_personal">興味がありません</string>
 	<string name="report_reason_personal_subtitle">あなたが見たくない場合</string>
@@ -148,8 +145,8 @@
 	<string name="report_comment_hint">追加コメント</string>
 	<string name="sending_report">レポートを送信しています...</string>
 	<string name="report_sent_title">ご報告ありがとうございます、追って確認します。</string>
-	<string name="report_sent_subtitle">私たちが確認している間でも、あなたは $s さんに対して対応することができます。</string>
-	<string name="unfollow_user">フォロー解除 %s</string>
+	<string name="report_sent_subtitle">私たちが確認している間でも、あなたは%sさんに対して対応することができます。</string>
+	<string name="unfollow_user">フォロー解除%s</string>
 	<string name="unfollow">フォロー解除</string>
 	<string name="mute_user_explain">ホームに投稿やブーストは表示されなくなりますが、相手にミュートしたことは伝わりません。</string>
 	<string name="block_user_explain">相手はあなたの投稿を見ることやフォローすることは出来ません。相手はブロックされていることはわかります。</string>
@@ -158,15 +155,7 @@
 	<string name="back">戻る</string>
 	<string name="instance_catalog_title">Mastodonはさまざまなコミュニティによって作られています</string>
 	<string name="instance_catalog_subtitle">あなたの趣味</string>
-	<string name="search_communities">サーバーまたはURLを検索</string>
-	<string name="instance_rules_title">いくつかのルールがあります</string>
-	<string name="instance_rules_subtitle">1分少々時間を取って、%s の管理者が定めたルールを確認してください。</string>
-	<string name="signup_title">さあ %s でセットアップしましょう</string>
 	<string name="edit_photo">編集</string>
-	<string name="display_name">表示名</string>
-	<string name="username">ユーザーネーム</string>
-	<string name="email">メールアドレス</string>
-	<string name="password">パスワード</string>
 	<string name="password_note">パスワードの強度を高めるため、英大文字・数字・特殊文字を含めてください。</string>
 	<string name="category_academia">アカデミア</string>
 	<string name="category_activism">アクティビズム</string>
@@ -181,8 +170,7 @@
 	<string name="category_music">ミュージック</string>
 	<string name="category_regional">地域</string>
 	<string name="category_tech">技術</string>
-	<string name="confirm_email_title">最後に</string>
-	<string name="confirm_email_subtitle">メールで送られたリンクへアクセスし、アカウントを認証してください。</string>
+	<!-- %s is the email address -->
 	<string name="resend">再送信</string>
 	<string name="open_email_app">メールアプリを開く</string>
 	<string name="resent_email">確認メールを再送信しました</string>
@@ -263,13 +251,12 @@
 	<string name="home_timeline">ホームタイムライン</string>
 	<string name="my_profile">プロフィール</string>
 	<string name="media_viewer">メディアビューアー</string>
-	<string name="follow_user">フォロー %s</string>
-	<string name="unfollowed_user">フォロー解除 %s</string>
-	<string name="followed_user">%s さんをフォローしました</string>
+	<string name="follow_user">フォロー%s</string>
+	<string name="unfollowed_user">フォロー解除%s</string>
+	<string name="followed_user">%sさんをフォローしました</string>
 	<string name="open_in_browser">ブラウザで開く</string>
 	<string name="hide_boosts_from_user">%sさんのブーストを非表示</string>
 	<string name="show_boosts_from_user">%sさんのブーストを表示</string>
-	<string name="signup_reason">なぜ参加したいと思ったのですか？</string>
 	<string name="signup_reason_note">申請を承認する際に役立つメッセージを添えてください.</string>
 	<string name="clear">クリア</string>
 	<string name="profile_header">ヘッダー画像</string>
@@ -302,7 +289,7 @@
 		<item quantity="other">%,d フォロワー</item>
 	</plurals>
 	<plurals name="x_following">
-		<item quantity="other">%,d フォロー中</item>
+		<item quantity="other">%,dフォロー中</item>
 	</plurals>
 	<plurals name="x_favorites">
 		<item quantity="other">%,d お気に入り</item>
@@ -356,7 +343,15 @@
 	<!-- %s is file size -->
 	<string name="download_update">ダウンロード (%s)</string>
 	<string name="install_update">インストール</string>
-	<string name="privacy_policy_title">Mastodonとあなたのプライバシー</string>
-	<string name="privacy_policy_subtitle">Mastodonアプリはいかなるデータも収集しませんが、サインアップするサーバーは別のポリシーを持っている場合があります。Mastodonアプリのプライバシーポリシーとサーバーのプライバシーポリシーを確認をし、同意してください。</string>
 	<string name="i_agree">同意する</string>
+	<string name="empty_list">このリストは空です。</string>
+	<string name="instance_signup_closed">このサーバーは新規登録を受け付けていません。</string>
+	<string name="text_copied">クリップボードにコピー</string>
+	<string name="add_bookmark">ブックマーク</string>
+	<string name="remove_bookmark">ブックマークから削除</string>
+	<string name="bookmarks">ブックマーク</string>
+	<string name="your_favorites">お気に入り</string>
+	<!-- %s is server domain -->
+	<!-- Shown in a progress dialog when you tap "follow all" -->
+	<!-- %1$s is server domain, %2$s is email domain. You can reorder these placeholders to fit your language better. -->
 </resources>

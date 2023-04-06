@@ -20,9 +20,13 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.os.ext.SdkExtensions;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
+import android.text.TextUtils;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -442,6 +446,35 @@ public class UiUtils{
 		ta.recycle();
 	}
 
+	public static void setRelationshipToActionButtonM3(Relationship relationship, Button button){
+		boolean secondaryStyle;
+		if(relationship.blocking){
+			button.setText(R.string.button_blocked);
+			secondaryStyle=true;
+		}else if(relationship.blockedBy){
+			button.setText(R.string.button_follow);
+			secondaryStyle=false;
+		}else if(relationship.requested){
+			button.setText(R.string.button_follow_pending);
+			secondaryStyle=true;
+		}else if(!relationship.following){
+			button.setText(relationship.followedBy ? R.string.follow_back : R.string.button_follow);
+			secondaryStyle=false;
+		}else{
+			button.setText(R.string.button_following);
+			secondaryStyle=true;
+		}
+
+		button.setEnabled(!relationship.blockedBy);
+		int styleRes=secondaryStyle ? R.style.Widget_Mastodon_M3_Button_Tonal : R.style.Widget_Mastodon_M3_Button_Filled;
+		TypedArray ta=button.getContext().obtainStyledAttributes(styleRes, new int[]{android.R.attr.background});
+		button.setBackground(ta.getDrawable(0));
+		ta.recycle();
+		ta=button.getContext().obtainStyledAttributes(styleRes, new int[]{android.R.attr.textColor});
+		button.setTextColor(ta.getColorStateList(0));
+		ta.recycle();
+	}
+
 	public static void performAccountAction(Activity activity, Account account, String accountID, Relationship relationship, Button button, Consumer<Boolean> progressCallback, Consumer<Relationship> resultCallback){
 		if(relationship.blocking){
 			confirmToggleBlockUser(activity, accountID, account, true, resultCallback);
@@ -455,7 +488,7 @@ public class UiUtils{
 						public void onSuccess(Relationship result){
 							resultCallback.accept(result);
 							progressCallback.accept(false);
-							if(!result.following){
+							if(!result.following && !result.requested){
 								E.post(new RemoveAccountPostsEvent(accountID, account.id, true));
 							}
 						}
@@ -586,5 +619,85 @@ public class UiUtils{
 			}
 		}
 		launchWebBrowser(context, url);
+	}
+
+	private static String getSystemProperty(String key){
+		try{
+			Class<?> props=Class.forName("android.os.SystemProperties");
+			Method get=props.getMethod("get", String.class);
+			return (String)get.invoke(null, key);
+		}catch(Exception ignore){}
+		return null;
+	}
+
+	public static boolean isMIUI(){
+		return !TextUtils.isEmpty(getSystemProperty("ro.miui.ui.version.code"));
+	}
+
+	public static int alphaBlendColors(int color1, int color2, float alpha){
+		float alpha0=1f-alpha;
+		int r=Math.round(((color1 >> 16) & 0xFF)*alpha0+((color2 >> 16) & 0xFF)*alpha);
+		int g=Math.round(((color1 >> 8) & 0xFF)*alpha0+((color2 >> 8) & 0xFF)*alpha);
+		int b=Math.round((color1 & 0xFF)*alpha0+(color2 & 0xFF)*alpha);
+		return 0xFF000000 | (r << 16) | (g << 8) | b;
+	}
+
+	/**
+	 * Check to see if Android platform photopicker is available on the device\
+	 *
+	 * @return whether the device supports photopicker intents.
+	 */
+	@SuppressLint("NewApi")
+	public static boolean isPhotoPickerAvailable(){
+		if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.TIRAMISU){
+			return true;
+		}else if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.R){
+			return SdkExtensions.getExtensionVersion(Build.VERSION_CODES.R)>=2;
+		}else
+			return false;
+	}
+
+	@SuppressLint("InlinedApi")
+	public static Intent getMediaPickerIntent(String[] mimeTypes, int maxCount){
+		Intent intent;
+		if(isPhotoPickerAvailable()){
+			intent=new Intent(MediaStore.ACTION_PICK_IMAGES);
+			if(maxCount>1)
+				intent.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, maxCount);
+		}else{
+			intent=new Intent(Intent.ACTION_GET_CONTENT);
+			intent.addCategory(Intent.CATEGORY_OPENABLE);
+		}
+		if(mimeTypes.length>1){
+			intent.setType("*/*");
+			intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+		}else if(mimeTypes.length==1){
+			intent.setType(mimeTypes[0]);
+		}else{
+			intent.setType("*/*");
+		}
+		if(maxCount>1)
+			intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+		return intent;
+	}
+
+	/**
+	 * Wraps a View.OnClickListener to filter multiple clicks in succession.
+	 * Useful for buttons that perform some action that changes their state asynchronously.
+	 * @param l
+	 * @return
+	 */
+	public static View.OnClickListener rateLimitedClickListener(View.OnClickListener l){
+		return new View.OnClickListener(){
+			private long lastClickTime;
+
+			@Override
+			public void onClick(View v){
+				if(SystemClock.uptimeMillis()-lastClickTime>500L){
+					lastClickTime=SystemClock.uptimeMillis();
+					l.onClick(v);
+				}
+			}
+		};
 	}
 }

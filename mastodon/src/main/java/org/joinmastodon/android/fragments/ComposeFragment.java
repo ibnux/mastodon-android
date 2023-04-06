@@ -20,6 +20,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Parcelable;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -87,7 +88,7 @@ import org.joinmastodon.android.ui.text.ComposeAutocompleteSpan;
 import org.joinmastodon.android.ui.text.ComposeHashtagOrMentionSpan;
 import org.joinmastodon.android.ui.text.HtmlParser;
 import org.joinmastodon.android.ui.utils.SimpleTextWatcher;
-import org.joinmastodon.android.ui.utils.TransferSpeedTracker;
+import org.joinmastodon.android.utils.TransferSpeedTracker;
 import org.joinmastodon.android.ui.utils.UiUtils;
 import org.joinmastodon.android.ui.views.ComposeEditText;
 import org.joinmastodon.android.ui.views.ComposeMediaLayout;
@@ -211,7 +212,7 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		else
 			charLimit=500;
 
-		loadDefaultStatusVisibility(savedInstanceState);
+		if (editingStatus == null) loadDefaultStatusVisibility(savedInstanceState);
 	}
 
 	@Override
@@ -330,6 +331,7 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		spoilerBg.setDrawableByLayerId(R.id.right_drawable, new SpoilerStripesDrawable());
 		spoilerEdit.setBackground(spoilerBg);
 		if((savedInstanceState!=null && savedInstanceState.getBoolean("hasSpoiler", false)) || hasSpoiler){
+			hasSpoiler=true;
 			spoilerEdit.setVisibility(View.VISIBLE);
 			spoilerBtn.setSelected(true);
 		}else if(editingStatus!=null && !TextUtils.isEmpty(editingStatus.spoilerText)){
@@ -410,6 +412,8 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 
 		mainEditText.setSelectionListener(this);
 		mainEditText.addTextChangedListener(new TextWatcher(){
+			private int lastChangeStart, lastChangeCount;
+
 			@Override
 			public void beforeTextChanged(CharSequence s, int start, int count, int after){
 
@@ -419,6 +423,16 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 			public void onTextChanged(CharSequence s, int start, int before, int count){
 				if(s.length()==0)
 					return;
+				lastChangeStart=start;
+				lastChangeCount=count;
+			}
+
+			@Override
+			public void afterTextChanged(Editable s){
+				if(s.length()==0)
+					return;
+				int start=lastChangeStart;
+				int count=lastChangeCount;
 				// offset one char back to catch an already typed '@' or '#' or ':'
 				int realStart=start;
 				start=Math.max(0, start-1);
@@ -464,10 +478,7 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 						editable.removeSpan(span);
 					}
 				}
-			}
 
-			@Override
-			public void afterTextChanged(Editable s){
 				updateCharCounter();
 			}
 		});
@@ -514,7 +525,7 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 						DraftMediaAttachment da=new DraftMediaAttachment();
 						da.serverAttachment=att;
 						da.description=att.description;
-						da.uri=Uri.parse(att.previewUrl);
+						da.uri=att.previewUrl!=null ? Uri.parse(att.previewUrl) : null;
 						da.state=AttachmentUploadState.DONE;
 						attachmentsView.addView(createMediaAttachmentView(da));
 						attachments.add(da);
@@ -629,9 +640,11 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 	}
 
 	private void onCustomEmojiClick(Emoji emoji){
-		int start=mainEditText.getSelectionStart();
-		String prefix=start>0 && !Character.isWhitespace(mainEditText.getText().charAt(start-1)) ? " :" : ":";
-		mainEditText.getText().replace(start, mainEditText.getSelectionEnd(), prefix+emoji.shortcode+':');
+		if(getActivity().getCurrentFocus() instanceof EditText edit){
+			int start=edit.getSelectionStart();
+			String prefix=start>0 && !Character.isWhitespace(edit.getText().charAt(start-1)) ? " :" : ":";
+			edit.getText().replace(start, edit.getSelectionEnd(), prefix+emoji.shortcode+':');
+		}
 	}
 
 	@Override
@@ -782,14 +795,38 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 				.show();
 	}
 
+
+	/**
+	 * Builds the correct intent for the device version to select media.
+	 *
+	 * <p>For Device version > T or R_SDK_v2, use the android platform photopicker via
+	 * {@link MediaStore#ACTION_PICK_IMAGES}
+	 *
+	 * <p>For earlier versions use the built in docs ui via {@link Intent#ACTION_GET_CONTENT}
+	 */
 	private void openFilePicker(){
-		Intent intent=new Intent(Intent.ACTION_GET_CONTENT);
-		intent.addCategory(Intent.CATEGORY_OPENABLE);
-		intent.setType("*/*");
-		if(instance.configuration!=null && instance.configuration.mediaAttachments!=null && instance.configuration.mediaAttachments.supportedMimeTypes!=null && !instance.configuration.mediaAttachments.supportedMimeTypes.isEmpty()){
-			intent.putExtra(Intent.EXTRA_MIME_TYPES, instance.configuration.mediaAttachments.supportedMimeTypes.toArray(new String[0]));
+		Intent intent;
+		boolean usePhotoPicker=UiUtils.isPhotoPickerAvailable();
+		if(usePhotoPicker){
+			intent=new Intent(MediaStore.ACTION_PICK_IMAGES);
+			intent.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MAX_ATTACHMENTS-getMediaAttachmentsCount());
 		}else{
-			intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+			intent=new Intent(Intent.ACTION_GET_CONTENT);
+			intent.addCategory(Intent.CATEGORY_OPENABLE);
+			intent.setType("*/*");
+		}
+		if(!usePhotoPicker && instance.configuration!=null &&
+				instance.configuration.mediaAttachments!=null &&
+				instance.configuration.mediaAttachments.supportedMimeTypes!=null &&
+				!instance.configuration.mediaAttachments.supportedMimeTypes.isEmpty()){
+			intent.putExtra(Intent.EXTRA_MIME_TYPES,
+					instance.configuration.mediaAttachments.supportedMimeTypes.toArray(
+							new String[0]));
+		}else{
+			if(!usePhotoPicker){
+				// If photo picker is being used these are the default mimetypes.
+				intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+			}
 		}
 		intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
 		startActivityForResult(intent, MEDIA_RESULT);
@@ -871,7 +908,8 @@ public class ComposeFragment extends MastodonToolbarFragment implements OnBackPr
 		View thumb=getActivity().getLayoutInflater().inflate(R.layout.compose_media_thumb, attachmentsView, false);
 		ImageView img=thumb.findViewById(R.id.thumb);
 		if(draft.serverAttachment!=null){
-			ViewImageLoader.load(img, draft.serverAttachment.blurhashPlaceholder, new UrlImageLoaderRequest(draft.serverAttachment.previewUrl, V.dp(250), V.dp(250)));
+			if(draft.serverAttachment.previewUrl!=null)
+				ViewImageLoader.load(img, draft.serverAttachment.blurhashPlaceholder, new UrlImageLoaderRequest(draft.serverAttachment.previewUrl, V.dp(250), V.dp(250)));
 		}else{
 			if(draft.mimeType.startsWith("image/")){
 				ViewImageLoader.load(img, null, new UrlImageLoaderRequest(draft.uri, V.dp(250), V.dp(250)));
